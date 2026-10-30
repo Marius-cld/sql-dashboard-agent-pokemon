@@ -1,0 +1,16 @@
+# Secrets
+.env
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+
+# macOS
+.DS_Store
+
+# Données et logs générés
+data/raw/*
+!data/raw/.gitkeep
+logs/*
+!logs/.gitkeep
