@@ -20,3 +20,5 @@ data/processed/
 logs/*
 !logs/.gitkeep
 docs/*
+# Tableaux de bord générés par l agent
+dashboard/pages/generated/
