@@ -19,6 +19,11 @@
 --     identifier when no English row exists.
 --   * Column "order" is renamed sort_order (reserved word).
 --   * No PRIMARY KEY constraints: composite keys in the report are unverified.
+--   * Layering (dbt-style naming):
+--       stg_*     this file — one table per source entity, typed and cleaned,
+--                 English names joined in; source names are kept.
+--       int_*, dim_*, fct_*, bridge_*   src/models.sql (star schema)
+--       mart_*    src/indicators.sql (dashboard-ready aggregates)
 --
 -- Skipped (out of scope, see report "Skip"):
 --   * conquest_*                       (Pokémon Conquest spin-off)
@@ -61,7 +66,7 @@ CREATE OR REPLACE MACRO clean_text(x) AS
 -- 1. GAMES & REFERENCE (priority 1: generations, regions)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE languages AS
+CREATE OR REPLACE TABLE stg_languages AS
 SELECT
     as_int(id)          AS language_id,
     as_text(iso639)     AS iso639,
@@ -72,7 +77,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/languages.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE regions AS
+CREATE OR REPLACE TABLE stg_regions AS
 SELECT
     as_int(r.id)                          AS region_id,
     as_text(r.identifier)                 AS identifier,
@@ -83,7 +88,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/region_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.region_id = r.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE generations AS
+CREATE OR REPLACE TABLE stg_generations AS
 SELECT
     as_int(g.id)                            AS generation_id,
     as_int(g.main_region_id)                AS main_region_id,
@@ -95,7 +100,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/generation_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.generation_id = g.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE version_groups AS
+CREATE OR REPLACE TABLE stg_version_groups AS
 SELECT
     as_int(id)            AS version_group_id,
     as_text(identifier)   AS identifier,
@@ -104,7 +109,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/version_groups.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE versions AS
+CREATE OR REPLACE TABLE stg_versions AS
 SELECT
     as_int(v.id)                            AS version_id,
     as_int(v.version_group_id)              AS version_group_id,
@@ -121,7 +126,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/version_names.csv',
 -- 2. TYPES, STATS & NATURES (priority 1: types, stats, type_efficacy)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE move_damage_classes AS
+CREATE OR REPLACE TABLE stg_move_damage_classes AS
 SELECT
     as_int(d.id)                            AS damage_class_id,
     as_text(d.identifier)                   AS identifier,
@@ -134,7 +139,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/move_damage_class_prose.csv',
        ON p.move_damage_class_id = d.id AND p.local_language_id = '9';
 
 -- Includes 10001 unknown / 10002 shadow / 19 stellar: filter with is_playable.
-CREATE OR REPLACE TABLE types AS
+CREATE OR REPLACE TABLE stg_types AS
 SELECT
     as_int(t.id)                            AS type_id,
     as_text(t.identifier)                   AS identifier,
@@ -149,7 +154,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/type_names.csv',
        ON n.type_id = t.id AND n.local_language_id = '9';
 
 -- damage_factor is a percentage (0/50/100/200); multiplier = factor / 100.
-CREATE OR REPLACE TABLE type_efficacy AS
+CREATE OR REPLACE TABLE stg_type_efficacy AS
 SELECT
     as_int(damage_type_id)                AS damage_type_id,
     as_int(target_type_id)                AS target_type_id,
@@ -159,7 +164,7 @@ FROM read_csv(getvariable('raw_data') || '/type_efficacy.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
 -- Stats 1-6 are base stats; 7-9 (accuracy, evasion, special) are not.
-CREATE OR REPLACE TABLE stats AS
+CREATE OR REPLACE TABLE stg_stats AS
 SELECT
     as_int(s.id)                            AS stat_id,
     as_text(s.identifier)                   AS identifier,
@@ -174,7 +179,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/stat_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.stat_id = s.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE natures AS
+CREATE OR REPLACE TABLE stg_natures AS
 SELECT
     as_int(na.id)                             AS nature_id,
     as_text(na.identifier)                    AS identifier,
@@ -195,7 +200,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/nature_names.csv',
 -- 3. POKÉMON CORE (priority 1: pokemon, species, types, stats, abilities)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE pokemon_colors AS
+CREATE OR REPLACE TABLE stg_pokemon_colors AS
 SELECT
     as_int(c.id)                            AS color_id,
     as_text(c.identifier)                   AS identifier,
@@ -206,7 +211,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/pokemon_color_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.pokemon_color_id = c.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE pokemon_shapes AS
+CREATE OR REPLACE TABLE stg_pokemon_shapes AS
 SELECT
     as_int(s.id)                            AS shape_id,
     as_text(s.identifier)                   AS identifier,
@@ -219,7 +224,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/pokemon_shape_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.pokemon_shape_id = s.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE pokemon_habitats AS
+CREATE OR REPLACE TABLE stg_pokemon_habitats AS
 SELECT
     as_int(h.id)                            AS habitat_id,
     as_text(h.identifier)                   AS identifier,
@@ -230,7 +235,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/pokemon_habitat_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.pokemon_habitat_id = h.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE growth_rates AS
+CREATE OR REPLACE TABLE stg_growth_rates AS
 SELECT
     as_int(g.id)                            AS growth_rate_id,
     as_text(g.identifier)                   AS identifier,
@@ -242,7 +247,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/growth_rate_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.growth_rate_id = g.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE experience AS
+CREATE OR REPLACE TABLE stg_experience AS
 SELECT
     as_int(growth_rate_id) AS growth_rate_id,
     as_int(level)          AS level,
@@ -250,7 +255,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/experience.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE egg_groups AS
+CREATE OR REPLACE TABLE stg_egg_groups AS
 SELECT
     as_int(e.id)                            AS egg_group_id,
     as_text(e.identifier)                   AS identifier,
@@ -261,7 +266,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/egg_group_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.egg_group_id = e.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE genders AS
+CREATE OR REPLACE TABLE stg_genders AS
 SELECT
     as_int(id)          AS gender_id,
     as_text(identifier) AS identifier
@@ -269,7 +274,7 @@ FROM read_csv(getvariable('raw_data') || '/genders.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
 -- gender_rate = eighths female, -1 = genderless.
-CREATE OR REPLACE TABLE pokemon_species AS
+CREATE OR REPLACE TABLE stg_pokemon_species AS
 SELECT
     as_int(s.id)                             AS species_id,
     as_text(s.identifier)                    AS identifier,
@@ -304,7 +309,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/pokemon_species_names.csv',
 
 -- height: decimetres -> metres, weight: hectograms -> kg.
 -- ids >= 10001 are alternate forms (megas, regionals, ...).
-CREATE OR REPLACE TABLE pokemon AS
+CREATE OR REPLACE TABLE stg_pokemon AS
 SELECT
     as_int(p.id)                    AS pokemon_id,
     as_text(p.identifier)           AS identifier,
@@ -318,7 +323,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/pokemon.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p;
 
-CREATE OR REPLACE TABLE pokemon_types AS
+CREATE OR REPLACE TABLE stg_pokemon_types AS
 SELECT
     as_int(pokemon_id) AS pokemon_id,
     as_int(type_id)    AS type_id,
@@ -326,7 +331,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/pokemon_types.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE pokemon_stats AS
+CREATE OR REPLACE TABLE stg_pokemon_stats AS
 SELECT
     as_int(pokemon_id) AS pokemon_id,
     as_int(stat_id)    AS stat_id,
@@ -335,14 +340,14 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/pokemon_stats.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE pokemon_egg_groups AS
+CREATE OR REPLACE TABLE stg_pokemon_egg_groups AS
 SELECT
     as_int(species_id)   AS species_id,
     as_int(egg_group_id) AS egg_group_id
 FROM read_csv(getvariable('raw_data') || '/pokemon_egg_groups.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE pokemon_forms AS
+CREATE OR REPLACE TABLE stg_pokemon_forms AS
 SELECT
     as_int(f.id)                             AS form_id,
     as_text(f.identifier)                    AS identifier,
@@ -362,7 +367,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/pokemon_form_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.pokemon_form_id = f.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE pokemon_form_types AS
+CREATE OR REPLACE TABLE stg_pokemon_form_types AS
 SELECT
     as_int(pokemon_form_id) AS form_id,
     as_int(type_id)         AS type_id,
@@ -371,7 +376,7 @@ FROM read_csv(getvariable('raw_data') || '/pokemon_form_types.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
 -- English Pokédex entries, one row per (species, version), text normalised.
-CREATE OR REPLACE TABLE pokemon_species_flavor_text AS
+CREATE OR REPLACE TABLE stg_pokemon_species_flavor_text AS
 SELECT DISTINCT
     as_int(species_id)      AS species_id,
     as_int(version_id)      AS version_id,
@@ -386,7 +391,7 @@ QUALIFY row_number() OVER (PARTITION BY species_id, version_id ORDER BY flavor_t
 -- 4. ABILITIES (priority 1)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE abilities AS
+CREATE OR REPLACE TABLE stg_abilities AS
 SELECT
     as_int(a.id)                            AS ability_id,
     as_text(a.identifier)                   AS identifier,
@@ -403,7 +408,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/ability_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.ability_id = a.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE pokemon_abilities AS
+CREATE OR REPLACE TABLE stg_pokemon_abilities AS
 SELECT
     as_int(pokemon_id) AS pokemon_id,
     as_int(ability_id) AS ability_id,
@@ -417,7 +422,7 @@ FROM read_csv(getvariable('raw_data') || '/pokemon_abilities.csv',
 -- 5. MOVES (priority 2 / 3)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE move_targets AS
+CREATE OR REPLACE TABLE stg_move_targets AS
 SELECT
     as_int(t.id)                            AS target_id,
     as_text(t.identifier)                   AS identifier,
@@ -429,7 +434,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/move_target_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.move_target_id = t.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE pokemon_move_methods AS
+CREATE OR REPLACE TABLE stg_pokemon_move_methods AS
 SELECT
     as_int(m.id)                            AS move_method_id,
     as_text(m.identifier)                   AS identifier,
@@ -442,7 +447,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/pokemon_move_method_prose.csv',
        ON p.pokemon_move_method_id = m.id AND p.local_language_id = '9';
 
 -- power / accuracy NULL is meaningful (status move / never misses): not zero-filled.
-CREATE OR REPLACE TABLE moves AS
+CREATE OR REPLACE TABLE stg_moves AS
 SELECT
     as_int(m.id)                            AS move_id,
     as_text(m.identifier)                   AS identifier,
@@ -469,7 +474,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/move_effect_prose.csv',
        ON p.move_effect_id = m.effect_id AND p.local_language_id = '9';
 
 -- 638k rows: filter on version_group_id in queries.
-CREATE OR REPLACE TABLE pokemon_moves AS
+CREATE OR REPLACE TABLE stg_pokemon_moves AS
 SELECT
     as_int(pokemon_id)             AS pokemon_id,
     as_int(version_group_id)       AS version_group_id,
@@ -481,7 +486,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/pokemon_moves.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE move_meta_categories AS
+CREATE OR REPLACE TABLE stg_move_meta_categories AS
 SELECT
     as_int(c.id)           AS meta_category_id,
     as_text(c.identifier)  AS identifier,
@@ -492,7 +497,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/move_meta_category_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.move_meta_category_id = c.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE move_meta_ailments AS
+CREATE OR REPLACE TABLE stg_move_meta_ailments AS
 SELECT
     as_int(a.id)                            AS meta_ailment_id,
     as_text(a.identifier)                   AS identifier,
@@ -503,7 +508,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/move_meta_ailment_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.move_meta_ailment_id = a.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE move_meta AS
+CREATE OR REPLACE TABLE stg_move_meta AS
 SELECT
     as_int(move_id)          AS move_id,
     as_int(meta_category_id) AS meta_category_id,
@@ -521,7 +526,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/move_meta.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE move_meta_stat_changes AS
+CREATE OR REPLACE TABLE stg_move_meta_stat_changes AS
 SELECT
     as_int(move_id) AS move_id,
     as_int(stat_id) AS stat_id,
@@ -529,7 +534,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/move_meta_stat_changes.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE machines AS
+CREATE OR REPLACE TABLE stg_machines AS
 SELECT
     as_int(machine_number)   AS machine_number,
     as_int(version_group_id) AS version_group_id,
@@ -543,14 +548,14 @@ FROM read_csv(getvariable('raw_data') || '/machines.csv',
 -- 6. EVOLUTION (priority 2)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE evolution_chains AS
+CREATE OR REPLACE TABLE stg_evolution_chains AS
 SELECT
     as_int(id)                   AS evolution_chain_id,
     as_int(baby_trigger_item_id) AS baby_trigger_item_id
 FROM read_csv(getvariable('raw_data') || '/evolution_chains.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE evolution_triggers AS
+CREATE OR REPLACE TABLE stg_evolution_triggers AS
 SELECT
     as_int(t.id)                            AS evolution_trigger_id,
     as_text(t.identifier)                   AS identifier,
@@ -561,7 +566,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/evolution_trigger_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.evolution_trigger_id = t.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE pokemon_evolution AS
+CREATE OR REPLACE TABLE stg_pokemon_evolution AS
 SELECT
     as_int(id)                       AS evolution_id,
     as_int(evolved_species_id)       AS evolved_species_id,
@@ -605,7 +610,7 @@ FROM read_csv(getvariable('raw_data') || '/pokemon_evolution.csv',
 -- 7. ITEMS & BERRIES (priority 2 / 3)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE item_pockets AS
+CREATE OR REPLACE TABLE stg_item_pockets AS
 SELECT
     as_int(ip.id)                             AS pocket_id,
     as_text(ip.identifier)                    AS identifier,
@@ -616,7 +621,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/item_pocket_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.item_pocket_id = ip.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE item_categories AS
+CREATE OR REPLACE TABLE stg_item_categories AS
 SELECT
     as_int(c.id)                            AS category_id,
     as_int(c.pocket_id)                     AS pocket_id,
@@ -628,7 +633,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/item_category_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.item_category_id = c.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE items AS
+CREATE OR REPLACE TABLE stg_items AS
 SELECT
     as_int(i.id)                            AS item_id,
     as_text(i.identifier)                   AS identifier,
@@ -647,7 +652,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/item_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.item_id = i.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE berry_firmness AS
+CREATE OR REPLACE TABLE stg_berry_firmness AS
 SELECT
     as_int(b.id)                            AS firmness_id,
     as_text(b.identifier)                   AS identifier,
@@ -658,7 +663,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/berry_firmness_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.berry_firmness_id = b.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE berries AS
+CREATE OR REPLACE TABLE stg_berries AS
 SELECT
     as_int(id)                   AS berry_id,
     as_int(item_id)              AS item_id,
@@ -673,7 +678,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/berries.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE pokemon_items AS
+CREATE OR REPLACE TABLE stg_pokemon_items AS
 SELECT
     as_int(pokemon_id) AS pokemon_id,
     as_int(version_id) AS version_id,
@@ -687,7 +692,7 @@ FROM read_csv(getvariable('raw_data') || '/pokemon_items.csv',
 -- 8. ENCOUNTERS & LOCATIONS (priority 3)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE locations AS
+CREATE OR REPLACE TABLE stg_locations AS
 SELECT
     as_int(l.id)                            AS location_id,
     as_int(l.region_id)                     AS region_id,
@@ -700,7 +705,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/location_names.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) n
        ON n.location_id = l.id AND n.local_language_id = '9';
 
-CREATE OR REPLACE TABLE location_areas AS
+CREATE OR REPLACE TABLE stg_location_areas AS
 SELECT
     as_int(a.id)                            AS location_area_id,
     as_int(a.location_id)                   AS location_id,
@@ -713,7 +718,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/location_area_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.location_area_id = a.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE encounter_methods AS
+CREATE OR REPLACE TABLE stg_encounter_methods AS
 SELECT
     as_int(m.id)                            AS encounter_method_id,
     as_text(m.identifier)                   AS identifier,
@@ -725,7 +730,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/encounter_method_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.encounter_method_id = m.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE encounter_slots AS
+CREATE OR REPLACE TABLE stg_encounter_slots AS
 SELECT
     as_int(id)                  AS encounter_slot_id,
     as_int(version_group_id)    AS version_group_id,
@@ -735,7 +740,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/encounter_slots.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE encounters AS
+CREATE OR REPLACE TABLE stg_encounters AS
 SELECT
     as_int(id)                AS encounter_id,
     as_int(version_id)        AS version_id,
@@ -748,7 +753,7 @@ FROM read_csv(getvariable('raw_data') || '/encounters.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
 -- min_perfect_ivs is entirely empty in the dump: cast explicitly.
-CREATE OR REPLACE TABLE encounter_pokemon_details AS
+CREATE OR REPLACE TABLE stg_encounter_pokemon_details AS
 SELECT
     as_int(encounter_id)    AS encounter_id,
     as_int(min_perfect_ivs) AS min_perfect_ivs,
@@ -758,7 +763,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/encounter_pokemon_details.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE location_area_encounter_rates AS
+CREATE OR REPLACE TABLE stg_location_area_encounter_rates AS
 SELECT
     as_int(location_area_id)    AS location_area_id,
     as_int(encounter_method_id) AS encounter_method_id,
@@ -772,7 +777,7 @@ FROM read_csv(getvariable('raw_data') || '/location_area_encounter_rates.csv',
 -- 9. POKÉDEXES (priority 3)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE pokedexes AS
+CREATE OR REPLACE TABLE stg_pokedexes AS
 SELECT
     as_int(d.id)                            AS pokedex_id,
     as_int(d.region_id)                     AS region_id,
@@ -786,7 +791,7 @@ LEFT JOIN read_csv(getvariable('raw_data') || '/pokedex_prose.csv',
               header = true, delim = ',', quote = '"', all_varchar = true) p
        ON p.pokedex_id = d.id AND p.local_language_id = '9';
 
-CREATE OR REPLACE TABLE pokemon_dex_numbers AS
+CREATE OR REPLACE TABLE stg_pokemon_dex_numbers AS
 SELECT
     as_int(species_id)     AS species_id,
     as_int(pokedex_id)     AS pokedex_id,
@@ -799,7 +804,7 @@ FROM read_csv(getvariable('raw_data') || '/pokemon_dex_numbers.csv',
 -- 10. HISTORY (priority 3: per-generation accuracy)
 -- =============================================================================
 
-CREATE OR REPLACE TABLE pokemon_types_past AS
+CREATE OR REPLACE TABLE stg_pokemon_types_past AS
 SELECT
     as_int(pokemon_id)    AS pokemon_id,
     as_int(generation_id) AS generation_id,
@@ -808,7 +813,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/pokemon_types_past.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE pokemon_stats_past AS
+CREATE OR REPLACE TABLE stg_pokemon_stats_past AS
 SELECT
     as_int(pokemon_id)    AS pokemon_id,
     as_int(generation_id) AS generation_id,
@@ -818,7 +823,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/pokemon_stats_past.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE pokemon_abilities_past AS
+CREATE OR REPLACE TABLE stg_pokemon_abilities_past AS
 SELECT
     as_int(pokemon_id)    AS pokemon_id,
     as_int(generation_id) AS generation_id,
@@ -828,7 +833,7 @@ SELECT
 FROM read_csv(getvariable('raw_data') || '/pokemon_abilities_past.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
 
-CREATE OR REPLACE TABLE type_efficacy_past AS
+CREATE OR REPLACE TABLE stg_type_efficacy_past AS
 SELECT
     as_int(damage_type_id) AS damage_type_id,
     as_int(target_type_id) AS target_type_id,
@@ -836,87 +841,3 @@ SELECT
     as_int(generation_id)  AS generation_id
 FROM read_csv(getvariable('raw_data') || '/type_efficacy_past.csv',
               header = true, delim = ',', quote = '"', all_varchar = true);
-
-
--- =============================================================================
--- 11. DASHBOARD VIEWS
--- =============================================================================
-
--- One row per Pokémon (incl. alternate forms) with names, types and base stats.
-CREATE OR REPLACE VIEW v_pokemon_summary AS
-WITH t AS (
-    SELECT pt.pokemon_id,
-           MAX(CASE WHEN pt.slot = 1 THEN ty.name END) AS type_1,
-           MAX(CASE WHEN pt.slot = 2 THEN ty.name END) AS type_2
-    FROM pokemon_types pt
-    JOIN types ty USING (type_id)
-    GROUP BY pt.pokemon_id
-), st AS (
-    SELECT pokemon_id,
-           MAX(CASE WHEN stat_id = 1 THEN base_stat END) AS hp,
-           MAX(CASE WHEN stat_id = 2 THEN base_stat END) AS attack,
-           MAX(CASE WHEN stat_id = 3 THEN base_stat END) AS defense,
-           MAX(CASE WHEN stat_id = 4 THEN base_stat END) AS special_attack,
-           MAX(CASE WHEN stat_id = 5 THEN base_stat END) AS special_defense,
-           MAX(CASE WHEN stat_id = 6 THEN base_stat END) AS speed,
-           SUM(base_stat) FILTER (WHERE stat_id BETWEEN 1 AND 6) AS base_stat_total
-    FROM pokemon_stats
-    GROUP BY pokemon_id
-)
-SELECT
-    p.pokemon_id,
-    p.identifier,
-    s.species_id,
-    s.name            AS species_name,
-    s.genus,
-    p.is_default,
-    p.is_alternate_form,
-    s.generation_id,
-    g.name            AS generation_name,
-    t.type_1,
-    t.type_2,
-    st.hp, st.attack, st.defense, st.special_attack, st.special_defense, st.speed,
-    st.base_stat_total,
-    p.height_m,
-    p.weight_kg,
-    p.base_experience,
-    s.capture_rate,
-    s.is_legendary,
-    s.is_mythical,
-    s.is_baby,
-    c.name            AS color,
-    sh.name           AS shape,
-    h.name            AS habitat
-FROM pokemon p
-JOIN pokemon_species s   ON s.species_id = p.species_id
-LEFT JOIN generations g  ON g.generation_id = s.generation_id
-LEFT JOIN t              ON t.pokemon_id = p.pokemon_id
-LEFT JOIN st             ON st.pokemon_id = p.pokemon_id
-LEFT JOIN pokemon_colors c    ON c.color_id = s.color_id
-LEFT JOIN pokemon_shapes sh   ON sh.shape_id = s.shape_id
-LEFT JOIN pokemon_habitats h  ON h.habitat_id = s.habitat_id;
-
--- Playable type matchup chart (18 x 18).
-CREATE OR REPLACE VIEW v_type_matchups AS
-SELECT
-    atk.name AS attacking_type,
-    def.name AS defending_type,
-    e.damage_factor,
-    e.damage_multiplier
-FROM type_efficacy e
-JOIN types atk ON atk.type_id = e.damage_type_id AND atk.is_playable
-JOIN types def ON def.type_id = e.target_type_id AND def.is_playable;
-
--- Species count and averages per generation (default forms only).
-CREATE OR REPLACE VIEW v_generation_summary AS
-SELECT
-    generation_id,
-    generation_name,
-    COUNT(*)                          AS species_count,
-    COUNT(*) FILTER (WHERE is_legendary) AS legendary_count,
-    COUNT(*) FILTER (WHERE is_mythical)  AS mythical_count,
-    ROUND(AVG(base_stat_total), 1)    AS avg_base_stat_total
-FROM v_pokemon_summary
-WHERE is_default
-GROUP BY generation_id, generation_name
-ORDER BY generation_id;
