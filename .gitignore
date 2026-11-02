@@ -10,8 +10,12 @@ __pycache__/
 # macOS
 .DS_Store
 
+# VS Code
+.vscode/
+
 # Données et logs générés
 data/raw/*
 !data/raw/.gitkeep
 logs/*
 !logs/.gitkeep
+docs/*
