@@ -1,0 +1,4 @@
+name: marts
+type: duckdb
+options:
+  filename: ../../../data/processed/marts.duckdb
