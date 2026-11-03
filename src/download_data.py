@@ -5,10 +5,11 @@ import requests
 from config.setting import RAW_DATA_DIR
 
 REPO = "PokeAPI/pokeapi"
-BRANCH = "master"
+# Commit épinglé (master au 2 novembre 2026) : deux téléchargements donnent les mêmes données
+REF = "e5b79b2e15d7c50735a945936afd4cd1cfd94eae"
 CSV_DIR = "data/v2/csv/"
-TREE_URL = f"https://api.github.com/repos/{REPO}/git/trees/{BRANCH}?recursive=1"
-RAW_URL = f"https://raw.githubusercontent.com/{REPO}/{BRANCH}"
+TREE_URL = f"https://api.github.com/repos/{REPO}/git/trees/{REF}?recursive=1"
+RAW_URL = f"https://raw.githubusercontent.com/{REPO}/{REF}"
 TIMEOUT = 30
 
 
