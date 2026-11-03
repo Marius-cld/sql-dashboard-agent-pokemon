@@ -44,7 +44,7 @@
 --     pokemon_form_flavor_text, pokemon_species_prose, item_flag*,
 --     item_fling_effect*, move_flag*, encounter_condition*,
 --     version_group_pokemon_move_methods, version_group_regions,
---     pokedex_version_groups, ability_prose, move_effect_prose,
+--     pokedex_version_groups, move_effects (its prose is joined from moves),
 --     ability_flavor_text, item_flavor_text, move_flavor_text
 --   * Non-English localization rows.
 -- =============================================================================

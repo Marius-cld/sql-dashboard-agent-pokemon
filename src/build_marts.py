@@ -7,7 +7,7 @@ SQL_SCRIPTS = ["cleaning.sql", "models.sql", "indicators.sql"]
 
 def run_scripts(con: duckdb.DuckDBPyConnection) -> None:
     for script in SQL_SCRIPTS:
-        con.execute((SQL_DIR / script).read_text())
+        con.execute((SQL_DIR / script).read_text(encoding="utf-8"))
 
 
 def export_marts(con: duckdb.DuckDBPyConnection) -> list[str]:

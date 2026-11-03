@@ -24,7 +24,7 @@ Produce `docs/data_report.md`: a precise, factual reference that lets a SQL engi
    - Pokémon core: `pokemon`, `pokemon_species`, `pokemon_stats`, `pokemon_types`, `pokemon_abilities`, `pokemon_forms`…
    - Moves, Abilities, Items, Berries, Types, Stats, Natures
    - Evolution; Encounters & locations; Games (versions, version groups, generations, regions, pokedexes)
-   - Localization: `*_names`, `*_prose`, `*_flavor_text` (keyed by `local_language_id`)
+   - Localization: `*_names`, `*_prose`, `*_flavor_text` (keyed by `local_language_id`, but `language_id` in `*_flavor_text`)
    - Contests / Pokéathlon; Conquest spin-off (`conquest_*`)
    - History: `*_past`, `*_changelog`
 5. **Relationships**: map each `*_id` column to its target table, and spot-check referential integrity on the core joins (orphan counts).

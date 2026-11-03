@@ -37,7 +37,8 @@ TOOLS = [
     {
         "name": "write_page",
         "description": "Écrit le tableau de bord Evidence (Markdown) dans pages/generated/<slug>.md. "
-        "Les blocs ```sql sans `${...}` sont réexécutés : la page est refusée si l'un d'eux échoue.",
+        "Les blocs ```sql sans `${...}` sont réexécutés sur les seules sources `marts.*`, sans les tables "
+        "créées avec run_sql : la page est refusée si l'un d'eux échoue.",
         "strict": True,
         "input_schema": {
             "type": "object",
@@ -62,7 +63,8 @@ def load_sources() -> duckdb.DuckDBPyConnection:
     # Les requêtes sources référencent les tables mart_* sans préfixe
     con.execute("USE src")
     for source in sorted(SOURCES_DIR.glob("*.sql")):
-        con.execute(f"CREATE TABLE memory.marts.{source.stem} AS {source.read_text()}")
+        query = source.read_text(encoding="utf-8")
+        con.execute(f"CREATE TABLE memory.marts.{source.stem} AS {query}")
     con.execute("USE memory")
     con.execute("DETACH src")
     # Plus aucun accès aux fichiers (read_text, COPY, ATTACH...), réglage non modifiable
@@ -82,7 +84,7 @@ def describe_sources(con: duckdb.DuckDBPyConnection) -> str:
 
 
 def build_system_prompt(con: duckdb.DuckDBPyConnection) -> str:
-    example = (DASHBOARD_DIR / "pages" / "index.md").read_text()
+    example = (DASHBOARD_DIR / "pages" / "index.md").read_text(encoding="utf-8")
     return f"""Tu crées des tableaux de bord Evidence (evidence.dev) sur des données Pokémon, en français.
 
 Sources disponibles (seules tables interrogeables, en SQL DuckDB) :
@@ -111,19 +113,21 @@ def run_sql(con: duckdb.DuckDBPyConnection, query: str) -> str:
     return json.dumps({"columns": columns, "rows": rows}, default=str)
 
 
-def check_queries(con: duckdb.DuckDBPyConnection, markdown: str) -> None:
-    """Réexécute les requêtes de la page. Celles qui dépendent d'un filtre ou d'une autre
-    requête (`${...}`) ne s'évaluent que dans Evidence : elles ne sont pas vérifiées."""
-    for name, query in SQL_BLOCK.findall(markdown):
-        if "${" in query:
-            continue
-        try:
-            con.execute(query)
-        except duckdb.Error as error:
-            raise ValueError(f"requête {name} : {error}") from error
+def check_queries(markdown: str) -> None:
+    """Réexécute les requêtes de la page sur une base neuve : la page ne doit pas dépendre des
+    tables que l'agent a créées ou modifiées avec run_sql. Celles qui dépendent d'un filtre ou
+    d'une autre requête (`${...}`) ne s'évaluent que dans Evidence : elles ne sont pas vérifiées."""
+    with load_sources() as con:
+        for name, query in SQL_BLOCK.findall(markdown):
+            if "${" in query:
+                continue
+            try:
+                con.execute(query)
+            except duckdb.Error as error:
+                raise ValueError(f"requête {name} : {error}") from error
 
 
-def write_page(con: duckdb.DuckDBPyConnection, slug: str, markdown: str, page_url: str | None) -> str:
+def write_page(slug: str, markdown: str, page_url: str | None) -> str:
     """`page_url` est la page déjà écrite pour cette question : la seule qu'on peut écraser."""
     # index.md serait servie sous /generated, pas sous /generated/index
     if not re.fullmatch(r"[a-z0-9_-]+", slug) or slug == "index":
@@ -132,9 +136,9 @@ def write_page(con: duckdb.DuckDBPyConnection, slug: str, markdown: str, page_ur
     path = GENERATED_DIR / f"{slug}.md"
     if path.exists() and url != page_url:
         raise ValueError(f"la page {slug} existe déjà : choisis un autre slug")
-    check_queries(con, markdown)
+    check_queries(markdown)
     GENERATED_DIR.mkdir(parents=True, exist_ok=True)
-    path.write_text(markdown)
+    path.write_text(markdown, encoding="utf-8")
     return url
 
 
@@ -158,7 +162,9 @@ def run_agent(con: duckdb.DuckDBPyConnection, question: str) -> dict:
 
         if response.stop_reason != "tool_use":
             text = "".join(b.text for b in response.content if b.type == "text")
-            return {"answer": text, "page_url": page_url}
+            # Sans texte (refus, limite de tokens atteinte), la page de chat n'afficherait rien
+            answer = text or f"Aucune réponse du modèle (arrêt : {response.stop_reason})."
+            return {"answer": answer, "page_url": page_url}
 
         results = []
         for block in response.content:
@@ -168,7 +174,7 @@ def run_agent(con: duckdb.DuckDBPyConnection, question: str) -> dict:
                 if block.name == "run_sql":
                     output = run_sql(con, block.input["query"])
                 else:
-                    page_url = write_page(con, block.input["slug"], block.input["markdown"], page_url)
+                    page_url = write_page(block.input["slug"], block.input["markdown"], page_url)
                     output = f"Page écrite : {page_url}"
                 results.append({"type": "tool_result", "tool_use_id": block.id, "content": output})
             except Exception as error:

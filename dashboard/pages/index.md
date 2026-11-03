@@ -104,7 +104,7 @@ order by stat_id
     x=stat_name
     y=type_name
     value=avg_base_stat
-    title="Statistique de base moyenne (type × statistique)"
+    title="Statistique de base moyenne (type × statistique, toutes générations)"
 />
 
 ## Table des affinités de types
